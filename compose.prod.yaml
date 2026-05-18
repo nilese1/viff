@@ -1,0 +1,29 @@
+# Prod-like profile. Run with:
+#   docker compose -f compose.yaml -f compose.prod.yaml up --build
+services:
+  app:
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+asyncpg://viff:viff@db:5432/viff
+    depends_on:
+      db:
+        condition: service_healthy
+    # No bind mounts; image contents are authoritative.
+    volumes: []
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: viff
+      POSTGRES_PASSWORD: viff
+      POSTGRES_DB: viff
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viff -d viff"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pg_data:

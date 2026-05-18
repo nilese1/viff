@@ -1,0 +1,16 @@
+# Base service shared by dev/prod. Compose auto-loads compose.override.yaml
+# for the dev workflow (SQLite, source bind-mount). For prod-like runs use:
+#   docker compose -f compose.yaml -f compose.prod.yaml up --build
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: viff:latest
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: "8000"

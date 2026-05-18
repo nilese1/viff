@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Items</h1>
+
+<form hx-post="/items" hx-target="#items" hx-swap="afterbegin" hx-on::after-request="this.reset()">
+  <input type="text" name="title" placeholder="Add an item..." required>
+  <button type="submit">Add</button>
+</form>
+
+<ul id="items">
+  {% for item in items %}
+    {% include "partials/item_row.html" %}
+  {% endfor %}
+</ul>
+{% endblock %}

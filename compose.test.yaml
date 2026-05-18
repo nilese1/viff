@@ -1,0 +1,13 @@
+# Run the pytest suite inside a container against in-memory SQLite:
+#   docker compose -f compose.yaml -f compose.test.yaml run --rm app
+services:
+  app:
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["uv sync --group dev && uv run pytest -q"]
+    environment:
+      APP_ENV: test
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml
+    ports: !reset []
