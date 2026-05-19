@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import Base, engine
+from app.routes import urls
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.include_router(urls.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

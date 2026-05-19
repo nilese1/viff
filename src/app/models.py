@@ -30,9 +30,6 @@ class TimestampedUUIDBase(Base):
     )
 
 
-# ------------------------------------------------------------------------------
-# MonitoredURL — a URL the user wants to watch
-# ------------------------------------------------------------------------------
 class MonitoredURL(TimestampedUUIDBase):
     """
     Represents a URL being tracked for changes.
@@ -59,12 +56,6 @@ class MonitoredURL(TimestampedUUIDBase):
         back_populates="monitored_url",
         cascade="all, delete-orphan",
         order_by="Snapshot.created_at.desc()",
-    )
-    diffs = relationship(
-        "Diff",
-        back_populates="monitored_url",
-        cascade="all, delete-orphan",
-        order_by="Diff.created_at.desc()",
     )
 
     def __repr__(self) -> str:
