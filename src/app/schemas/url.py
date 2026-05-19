@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import UUID4, BaseModel, ConfigDict, HttpUrl
 
+from app.schemas.base import BaseCursorPaginationParams
+
 
 class URLBase(BaseModel):
     url: HttpUrl
@@ -29,3 +31,7 @@ class URLResponse(URLBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class URLPaginationParams(BaseCursorPaginationParams):
+    search_str: str | None = None
