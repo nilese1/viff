@@ -2,7 +2,10 @@ from datetime import datetime
 
 from pydantic import UUID4, BaseModel, ConfigDict, HttpUrl
 
-from app.schemas.base import BaseCursorPaginationParams
+from app.schemas.base import (
+    BaseCursorPaginationParams,
+    BaseCursorPaginationResponse,
+)
 
 
 class URLBase(BaseModel):
@@ -17,6 +20,7 @@ class URLCreate(URLBase):
 
 
 class URLUpdate(BaseModel):
+    url: HttpUrl | None = None
     label: str | None = None
     check_interval: int | None = None
     selector_ignore: str | None = None
@@ -35,3 +39,7 @@ class URLResponse(URLBase):
 
 class URLPaginationParams(BaseCursorPaginationParams):
     search_str: str | None = None
+
+
+class URLPaginationResponse(BaseCursorPaginationResponse):
+    urls: list[URLResponse]

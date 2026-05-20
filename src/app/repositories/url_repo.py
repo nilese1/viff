@@ -1,8 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,15 +35,29 @@ async def get_paginated(
     search_str: str | None = None,
     *,
     cursor: datetime | None = None,
+    cursor_id: UUID | None = None,
     limit: int = 20,
 ) -> list[MonitoredURL]:
-    stmt = select(MonitoredURL).order_by(MonitoredURL.created_at.asc()).limit(limit)
+    stmt = (
+        select(MonitoredURL)
+        .order_by(MonitoredURL.created_at.asc(), MonitoredURL.id.asc())
+        .limit(limit + 1)
+    )
 
     if cursor:
-        stmt = stmt.where(MonitoredURL.created_at > cursor)
+        if cursor_id:
+            stmt = stmt.where(
+                or_(
+                    MonitoredURL.created_at > cursor,
+                    # tiebreaker via id
+                    and_(MonitoredURL.created_at == cursor, MonitoredURL.id > cursor_id),
+                )
+            )
+        else:
+            stmt = stmt.where(MonitoredURL.created_at > cursor)
 
     if search_str:
-        stmt = stmt.where(MonitoredURL.url.like(search_str))
+        stmt = stmt.where(MonitoredURL.url.icontains(search_str, autoescape=True))
 
     result = await db.execute(stmt)
 
@@ -78,13 +91,13 @@ async def update(
     db: AsyncSession,
     monitored_url_id: UUID,
     payload: URLUpdate,
-) -> MonitoredURL:
+) -> MonitoredURL | None:
     url = await get(db, monitored_url_id)
 
     if not url:
-        raise HTTPException(status_code=404)
+        return None
 
-    update_data = payload.model_dump(exclude_unset=True)
+    update_data = payload.model_dump(exclude_unset=True, mode="json")
     for field, value in update_data.items():
         setattr(url, field, value)
 

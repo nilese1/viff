@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MonitoredURL
@@ -31,11 +32,12 @@ async def get_paginated(
     params: URLPaginationParams,
 ) -> list[MonitoredURL]:
     page = await url_repo.get_paginated(
-        db, params.search_str, cursor=params.cursor, limit=params.limit
+        db,
+        params.search_str,
+        cursor=params.cursor,
+        cursor_id=params.cursor_id,
+        limit=params.limit,
     )
-
-    if len(page) <= 0:
-        raise HTTPException(status_code=404, detail="No URLs found")
 
     return page
 
@@ -46,17 +48,25 @@ async def create(db: AsyncSession, payload: URLCreate) -> MonitoredURL:
     if existing:
         raise HTTPException(status_code=409, detail="URL already exists")
 
-    return await url_repo.create(
-        db,
-        payload.url.__str__(),
-        label=payload.label,
-        check_interval=payload.check_interval,
-        selector_ignore=payload.selector_ignore,
-    )
+    try:
+        return await url_repo.create(
+            db,
+            payload.url.__str__(),
+            label=payload.label,
+            check_interval=payload.check_interval,
+            selector_ignore=payload.selector_ignore,
+        )
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="URL already exists") from exc
 
 
 async def update(db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate) -> MonitoredURL:
-    return await url_repo.update(db, monitored_url_id, payload)
+    monitored_url = await url_repo.update(db, monitored_url_id, payload)
+
+    if not monitored_url:
+        raise HTTPException(status_code=404, detail="URL not found")
+
+    return monitored_url
 
 
 async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:

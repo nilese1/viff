@@ -11,8 +11,6 @@ from sqlalchemy.pool import StaticPool
 
 from app.config import get_settings
 
-_UNSET = object()
-
 
 class Base(DeclarativeBase):
     pass
