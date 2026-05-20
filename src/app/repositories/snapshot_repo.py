@@ -1,14 +1,12 @@
 from datetime import datetime
-from typing import cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Snapshot
-
-_UNSET = object()
+from app.schemas.snapshot import SnapshotUpdate
 
 
 async def _commit_and_refresh(db: AsyncSession, snapshot: Snapshot) -> Snapshot:
@@ -26,31 +24,46 @@ async def get(db: AsyncSession, snapshot_id: UUID) -> Snapshot | None:
     return await db.get(Snapshot, snapshot_id)
 
 
-async def list_all(
+async def get_by_monitored_url(
     db: AsyncSession,
-    *,
-    offset: int = 0,
-    limit: int = 100,
-) -> list[Snapshot]:
-    stmt = select(Snapshot).order_by(Snapshot.created_at.desc()).offset(offset).limit(limit)
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
+    monitored_url_id: UUID,
+    snapshot_id: UUID,
+) -> Snapshot | None:
+    result = await db.execute(
+        select(Snapshot).filter_by(
+            id=snapshot_id,
+            monitored_url_id=monitored_url_id,
+        )
+    )
+    return result.scalar_one_or_none()
 
 
-async def list_by_monitored_url(
+async def get_paginated_by_monitored_url(
     db: AsyncSession,
     monitored_url_id: UUID,
     *,
-    offset: int = 0,
-    limit: int = 100,
+    cursor: datetime | None = None,
+    cursor_id: UUID | None = None,
+    limit: int = 20,
 ) -> list[Snapshot]:
     stmt = (
         select(Snapshot)
         .where(Snapshot.monitored_url_id == monitored_url_id)
-        .order_by(Snapshot.created_at.desc())
-        .offset(offset)
-        .limit(limit)
+        .order_by(Snapshot.created_at.asc(), Snapshot.id.asc())
+        .limit(limit + 1)
     )
+
+    if cursor:
+        if cursor_id:
+            stmt = stmt.where(
+                or_(
+                    Snapshot.created_at > cursor,
+                    and_(Snapshot.created_at == cursor, Snapshot.id > cursor_id),
+                )
+            )
+        else:
+            stmt = stmt.where(Snapshot.created_at > cursor)
+
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -111,29 +124,11 @@ async def create(
 async def update(
     db: AsyncSession,
     snapshot: Snapshot,
-    *,
-    monitored_url_id: UUID | None = None,
-    raw_html: str | None | object = _UNSET,
-    text_content: str | None | object = _UNSET,
-    content_hash: str | None | object = _UNSET,
-    http_status: int | None | object = _UNSET,
-    error_message: str | None | object = _UNSET,
-    notified_at: datetime | None | object = _UNSET,
+    payload: SnapshotUpdate,
 ) -> Snapshot:
-    if monitored_url_id is not None:
-        snapshot.monitored_url_id = monitored_url_id
-    if raw_html is not _UNSET:
-        snapshot.raw_html = cast(str | None, raw_html)
-    if text_content is not _UNSET:
-        snapshot.text_content = cast(str | None, text_content)
-    if content_hash is not _UNSET:
-        snapshot.content_hash = cast(str | None, content_hash)
-    if http_status is not _UNSET:
-        snapshot.http_status = cast(int | None, http_status)
-    if error_message is not _UNSET:
-        snapshot.error_message = cast(str | None, error_message)
-    if notified_at is not _UNSET:
-        snapshot.notified_at = cast(datetime | None, notified_at)
+    update_data = payload.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(snapshot, field, value)
 
     return await _commit_and_refresh(db, snapshot)
 

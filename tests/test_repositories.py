@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories import snapshot_repo, url_repo
+from app.schemas.snapshot import SnapshotUpdate
 from app.schemas.url import URLUpdate
 
 
@@ -74,26 +75,22 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
     assert by_hash is not None
     assert by_hash.id == snapshot.id
 
-    snapshots = await snapshot_repo.list_by_monitored_url(db_session, monitored_url.id)
-    assert [item.id for item in snapshots] == [snapshot.id]
-
     latest = await snapshot_repo.get_latest_by_monitored_url(db_session, monitored_url.id)
     assert latest is not None
     assert latest.id == snapshot.id
-
-    all_snapshots = await snapshot_repo.list_all(db_session)
-    assert [item.id for item in all_snapshots] == [snapshot.id]
 
     notified_at = datetime(2026, 1, 1, 12, 0, 0)
     updated = await snapshot_repo.update(
         db_session,
         snapshot,
-        raw_html=None,
-        text_content="second",
-        content_hash="hash-2",
-        http_status=500,
-        error_message="server error",
-        notified_at=notified_at,
+        SnapshotUpdate(
+            raw_html=None,
+            text_content="second",
+            content_hash="hash-2",
+            http_status=500,
+            error_message="server error",
+            notified_at=notified_at,
+        ),
     )
     assert updated.raw_html is None
     assert updated.text_content == "second"
@@ -101,6 +98,15 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
     assert updated.http_status == 500
     assert updated.error_message == "server error"
     assert updated.notified_at == notified_at
+
+    updated = await snapshot_repo.update(
+        db_session,
+        snapshot,
+        SnapshotUpdate(text_content="third"),
+    )
+    assert updated.text_content == "third"
+    assert updated.content_hash == "hash-2"
+    assert updated.error_message == "server error"
 
     deleted = await snapshot_repo.delete_by_id(db_session, snapshot.id)
     assert deleted is True
