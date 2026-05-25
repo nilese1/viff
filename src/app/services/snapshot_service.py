@@ -79,9 +79,10 @@ async def update(
     payload: SnapshotUpdate,
 ) -> Snapshot:
     snapshot = await get_by_id(db, monitored_url_id, snapshot_id)
+    update_data = SnapshotUpdate.model_validate(payload).model_dump(exclude_unset=True)
 
     try:
-        return await snapshot_repo.update(db, snapshot, payload)
+        return await snapshot_repo.update(db, snapshot, **update_data)
     except IntegrityError as exc:
         raise HTTPException(
             status_code=409,

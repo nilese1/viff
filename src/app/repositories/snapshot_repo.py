@@ -6,7 +6,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Snapshot
-from app.schemas.snapshot import SnapshotUpdate
 
 
 async def _commit_and_refresh(db: AsyncSession, snapshot: Snapshot) -> Snapshot:
@@ -124,9 +123,8 @@ async def create(
 async def update(
     db: AsyncSession,
     snapshot: Snapshot,
-    payload: SnapshotUpdate,
+    **update_data: object,
 ) -> Snapshot:
-    update_data = payload.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(snapshot, field, value)
 

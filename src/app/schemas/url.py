@@ -37,9 +37,28 @@ class URLResponse(URLBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class URLPaginationParams(BaseCursorPaginationParams):
+class URLFilterParams(BaseModel):
     search_str: str | None = None
+    url: HttpUrl | None = None
+    label: str | None = None
+    check_interval: int | None = None
+    selector_ignore: str | None = None
+    last_checked_at: datetime | None = None
+    is_active: str | None = None
+    is_due_for_check: bool | None = None
+
+
+class URLPaginationParams(URLFilterParams, BaseCursorPaginationParams):
+    pass
 
 
 class URLPaginationResponse(BaseCursorPaginationResponse):
+    urls: list[URLResponse]
+
+
+class URLListParams(URLFilterParams):
+    pass
+
+
+class URLListResponse(BaseModel):
     urls: list[URLResponse]

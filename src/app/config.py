@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     database_url: str | None = None
     sqlite_path: str = "./data/dev.db"
 
+    url_polling_rate_secs: int = 60
+
     @property
     def is_production(self) -> bool:
         return self.app_env is AppEnv.production
