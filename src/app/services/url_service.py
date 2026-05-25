@@ -116,7 +116,9 @@ async def scrape_url(db, url: MonitoredURL):
 
         soup = BeautifulSoup(response.text, "html.parser")
 
-        # strip ignored selectors
+        # strip ignored selectors content is still saved in its entirety
+        # but stripping the selectors is for the hash only
+        # so we don't refresh if certain elements change
         if url.selector_ignore:
             for selector in url.selector_ignore.split(","):
                 for tag in soup.select(selector.strip()):
@@ -151,4 +153,3 @@ async def scrape_url(db, url: MonitoredURL):
         db.add(snapshot)
         url.last_checked_at = datetime.now(UTC)
         await db.commit()
-

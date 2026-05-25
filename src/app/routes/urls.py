@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.schemas.url import (
     URLCreate,
-    URLListParams,
-    URLListResponse,
     URLPaginationParams,
     URLPaginationResponse,
     URLResponse,

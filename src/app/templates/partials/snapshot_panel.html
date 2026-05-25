@@ -1,0 +1,53 @@
+<article class="snapshot-panel">
+  <header class="snapshot-panel-header">
+    <div>
+      <p class="eyebrow">{{ panel_title }}</p>
+      <h2>{{ snapshot.id }}</h2>
+    </div>
+    {% if snapshot.http_status %}
+      <span class="status-code">{{ snapshot.http_status }}</span>
+    {% endif %}
+  </header>
+
+  <dl class="snapshot-meta">
+    <div>
+      <dt>URL ID</dt>
+      <dd>{{ snapshot.monitored_url_id }}</dd>
+    </div>
+    <div>
+      <dt>Created</dt>
+      <dd>{{ snapshot.created_at.strftime("%Y-%m-%d %H:%M:%S %Z") }}</dd>
+    </div>
+    {% if snapshot.content_hash %}
+      <div>
+        <dt>Hash</dt>
+        <dd>{{ snapshot.content_hash }}</dd>
+      </div>
+    {% endif %}
+  </dl>
+
+  <div class="snapshot-preview">
+    {% if snapshot.raw_html %}
+      <iframe
+        title="{{ panel_title }} rendered HTML"
+        sandbox=""
+        srcdoc="{{ snapshot.raw_html|e }}"
+      ></iframe>
+    {% elif snapshot.text_content %}
+      <pre>{{ snapshot.text_content }}</pre>
+    {% else %}
+      <p class="muted">This snapshot has no raw HTML or text content.</p>
+    {% endif %}
+  </div>
+
+  {% if snapshot.text_content %}
+    <details class="snapshot-text">
+      <summary>Text content</summary>
+      <pre>{{ snapshot.text_content }}</pre>
+    </details>
+  {% endif %}
+
+  {% if snapshot.error_message %}
+    <p class="snapshot-error">{{ snapshot.error_message }}</p>
+  {% endif %}
+</article>

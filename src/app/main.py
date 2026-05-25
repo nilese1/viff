@@ -1,14 +1,14 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import Base, engine
-from app.routes import snapshots, urls
+from app.routes import pages, snapshots, urls
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -28,9 +28,12 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
 
     from app.scheduler.tasks import poll_due_urls
+
     scheduler.add_job(
         poll_due_urls,
-        trigger=IntervalTrigger(seconds=settings.url_polling_rate_secs),  # check every minute which URLs are due
+        trigger=IntervalTrigger(
+            seconds=settings.url_polling_rate_secs
+        ),  # check every minute which URLs are due
         id="poll_due_urls",
         replace_existing=True,
     )
@@ -48,6 +51,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.include_router(pages.router)
     app.include_router(urls.router)
     app.include_router(snapshots.router)
 

@@ -29,6 +29,10 @@ async def get_by_id(
     return snapshot
 
 
+async def find_by_id(db: AsyncSession, snapshot_id: UUID) -> Snapshot | None:
+    return await snapshot_repo.get(db, snapshot_id)
+
+
 async def get_paginated(
     db: AsyncSession,
     monitored_url_id: UUID,

@@ -1,15 +1,17 @@
 {% extends "base.html" %}
+{% block title %}Snapshot Compare | viff{% endblock %}
+
 {% block content %}
-<h1>Items</h1>
+<main class="page-shell">
+  <header class="page-header">
+    <p class="eyebrow">viff proof of concept</p>
+    <h1>Snapshot Compare</h1>
+  </header>
 
-<form hx-post="/items" hx-target="#items" hx-swap="afterbegin" hx-on::after-request="this.reset()">
-  <input type="text" name="title" placeholder="Add an item..." required>
-  <button type="submit">Add</button>
-</form>
+  {% include "partials/snapshot_compare_form.html" %}
 
-<ul id="items">
-  {% for item in items %}
-    {% include "partials/item_row.html" %}
-  {% endfor %}
-</ul>
+  <section id="snapshot-compare-results" class="compare-results" aria-live="polite">
+    {% include "partials/snapshot_compare_result.html" %}
+  </section>
+</main>
 {% endblock %}

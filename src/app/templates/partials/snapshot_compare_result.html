@@ -1,0 +1,21 @@
+{% if messages %}
+  <div class="notice" role="status">
+    {% for message in messages %}
+      <p>{{ message }}</p>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if left_snapshot and right_snapshot %}
+  <div class="snapshot-grid">
+    {% set snapshot = left_snapshot %}
+    {% set panel_title = "Left snapshot" %}
+    {% include "partials/snapshot_panel.html" %}
+
+    {% set snapshot = right_snapshot %}
+    {% set panel_title = "Right snapshot" %}
+    {% include "partials/snapshot_panel.html" %}
+  </div>
+{% elif not left_snapshot_id and not right_snapshot_id %}
+  {% include "partials/snapshot_empty.html" %}
+{% endif %}

@@ -1,0 +1,33 @@
+<form
+  class="compare-form"
+  hx-get="/"
+  hx-target="#snapshot-compare-results"
+  hx-swap="innerHTML"
+  hx-push-url="true"
+>
+  <label>
+    <span>Left snapshot ID</span>
+    <input
+      type="text"
+      name="left_snapshot_id"
+      value="{{ left_snapshot_id or '' }}"
+      placeholder="00000000-0000-0000-0000-000000000000"
+      autocomplete="off"
+      required
+    >
+  </label>
+
+  <label>
+    <span>Right snapshot ID</span>
+    <input
+      type="text"
+      name="right_snapshot_id"
+      value="{{ right_snapshot_id or '' }}"
+      placeholder="00000000-0000-0000-0000-000000000000"
+      autocomplete="off"
+      required
+    >
+  </label>
+
+  <button type="submit">Compare</button>
+</form>

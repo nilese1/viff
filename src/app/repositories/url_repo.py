@@ -68,9 +68,7 @@ def _is_due_for_check(monitored_url: MonitoredURL, now: datetime) -> bool:
     if monitored_url.last_checked_at.tzinfo is None:
         now_for_comparison = now.replace(tzinfo=None)
 
-    next_check_at = monitored_url.last_checked_at + timedelta(
-        seconds=monitored_url.check_interval
-    )
+    next_check_at = monitored_url.last_checked_at + timedelta(seconds=monitored_url.check_interval)
     return next_check_at <= now_for_comparison
 
 
@@ -105,10 +103,7 @@ async def get_paginated(
     is_active: str | None = None,
     is_due_for_check: bool | None = None,
 ) -> list[MonitoredURL]:
-    stmt = (
-        select(MonitoredURL)
-        .order_by(MonitoredURL.created_at.asc(), MonitoredURL.id.asc())
-    )
+    stmt = select(MonitoredURL).order_by(MonitoredURL.created_at.asc(), MonitoredURL.id.asc())
 
     if cursor and cursor_id:
         stmt = stmt.where(
