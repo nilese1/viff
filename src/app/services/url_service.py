@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import MonitoredURL, Snapshot
+from app.models import MonitoredURL
 from app.repositories import snapshot_repo, url_repo
 from app.schemas.url import URLCreate, URLListParams, URLPaginationParams, URLUpdate
 
@@ -109,10 +109,19 @@ async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
         raise HTTPException(status_code=404, detail="URL not found")
 
 
-async def scrape_url(db, url: MonitoredURL):
+async def scrape_url(db: AsyncSession, url: MonitoredURL, depth: int = 0):
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.get(str(url.url))
+
+        if depth > 10:
+            raise Exception("Redirected more than 10 times please check your url")
+
+        if response.status_code == 301:
+            # so much wrong with this but good enough!
+            url.url = response.headers["location"]
+            await scrape_url(db, url, depth + 1)
+            return
 
         soup = BeautifulSoup(response.text, "html.parser")
 
@@ -129,27 +138,24 @@ async def scrape_url(db, url: MonitoredURL):
 
         # skip if content hasn't changed
         if await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
-            url.last_checked_at = datetime.now(UTC)
-            await db.commit()
+            await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
             return
 
-        snapshot = Snapshot(
-            monitored_url_id=url.id,
+        await snapshot_repo.create(
+            db,
+            url.id,
             raw_html=response.text,
             text_content=text_content,
             content_hash=content_hash,
             http_status=response.status_code,
         )
-        db.add(snapshot)
-        url.last_checked_at = datetime.now(UTC)
-        await db.commit()
+        await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
 
     except Exception as e:
-        snapshot = Snapshot(
-            monitored_url_id=url.id,
+        await snapshot_repo.create(
+            db,
+            url.id,
             http_status=None,
             error_message=str(e),
         )
-        db.add(snapshot)
-        url.last_checked_at = datetime.now(UTC)
-        await db.commit()
+        await url_repo.update(db, url, last_checked_at=datetime.now(UTC))

@@ -17,6 +17,7 @@ dependencies = [
     "apscheduler>=3.11.2",
     "bs4>=0.0.2",
     "httpx>=0.28.1",
+    "sqlalchemy-stubs>=0.4",
 ]
 
 [dependency-groups]
