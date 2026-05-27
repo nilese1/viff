@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db import commit_and_refresh, commit_or_rollback
 from app.models import Snapshot
 from app.repositories import snapshot_repo, url_repo
 from app.schemas.snapshot import SnapshotCreate, SnapshotPaginationParams, SnapshotUpdate
@@ -59,7 +60,7 @@ async def create(
     await _ensure_monitored_url_exists(db, monitored_url_id)
 
     try:
-        return await snapshot_repo.create(
+        snapshot = await snapshot_repo.create(
             db,
             monitored_url_id,
             raw_html=payload.raw_html,
@@ -69,6 +70,7 @@ async def create(
             error_message=payload.error_message,
             notified_at=payload.notified_at,
         )
+        return await commit_and_refresh(db, snapshot)
     except IntegrityError as exc:
         raise HTTPException(
             status_code=409,
@@ -86,7 +88,8 @@ async def update(
     update_data = SnapshotUpdate.model_validate(payload).model_dump(exclude_unset=True)
 
     try:
-        return await snapshot_repo.update(db, snapshot, **update_data)
+        snapshot = await snapshot_repo.update(db, snapshot, **update_data)
+        return await commit_and_refresh(db, snapshot)
     except IntegrityError as exc:
         raise HTTPException(
             status_code=409,
@@ -97,3 +100,4 @@ async def update(
 async def delete(db: AsyncSession, monitored_url_id: UUID, snapshot_id: UUID) -> None:
     snapshot = await get_by_id(db, monitored_url_id, snapshot_id)
     await snapshot_repo.delete(db, snapshot)
+    await commit_or_rollback(db)

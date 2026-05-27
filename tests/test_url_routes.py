@@ -51,4 +51,3 @@ async def test_url_pagination_accepts_url_base_filters(client: AsyncClient) -> N
     assert resp.status_code == 200
     urls = resp.json()["urls"]
     assert [url["id"] for url in urls] == [expected_id]
-

@@ -2,21 +2,9 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Snapshot
-
-
-async def _commit_and_refresh(db: AsyncSession, snapshot: Snapshot) -> Snapshot:
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise
-
-    await db.refresh(snapshot)
-    return snapshot
 
 
 async def get(db: AsyncSession, snapshot_id: UUID) -> Snapshot | None:
@@ -117,7 +105,7 @@ async def create(
     )
 
     db.add(snapshot)
-    return await _commit_and_refresh(db, snapshot)
+    return snapshot
 
 
 async def update(
@@ -128,16 +116,11 @@ async def update(
     for field, value in update_data.items():
         setattr(snapshot, field, value)
 
-    return await _commit_and_refresh(db, snapshot)
+    return snapshot
 
 
 async def delete(db: AsyncSession, snapshot: Snapshot) -> None:
-    try:
-        await db.delete(snapshot)
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise
+    await db.delete(snapshot)
 
 
 async def delete_by_id(db: AsyncSession, snapshot_id: UUID) -> bool:

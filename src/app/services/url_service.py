@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db import commit_and_refresh, commit_or_rollback
 from app.models import MonitoredURL
 from app.repositories import snapshot_repo, url_repo
 from app.schemas.url import URLCreate, URLListParams, URLPaginationParams, URLUpdate
@@ -81,13 +82,14 @@ async def create(db: AsyncSession, payload: URLCreate) -> MonitoredURL:
         raise HTTPException(status_code=409, detail="URL already exists")
 
     try:
-        return await url_repo.create(
+        monitored_url = await url_repo.create(
             db,
             payload.url.__str__(),
             label=payload.label,
             check_interval=payload.check_interval,
             selector_ignore=payload.selector_ignore,
         )
+        return await commit_and_refresh(db, monitored_url)
     except IntegrityError as exc:
         raise HTTPException(status_code=409, detail="URL already exists") from exc
 
@@ -99,7 +101,8 @@ async def update(db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate) -
         mode="json",
     )
 
-    return await url_repo.update(db, monitored_url, **update_data)
+    monitored_url = await url_repo.update(db, monitored_url, **update_data)
+    return await commit_and_refresh(db, monitored_url)
 
 
 async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
@@ -107,6 +110,8 @@ async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
 
     if not result:
         raise HTTPException(status_code=404, detail="URL not found")
+
+    await commit_or_rollback(db)
 
 
 async def scrape_url(db: AsyncSession, url: MonitoredURL, depth: int = 0):
@@ -137,19 +142,15 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL, depth: int = 0):
         content_hash = hashlib.sha256(text_content.encode()).hexdigest()
 
         # skip if content hasn't changed
-        if await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
-            await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
-            return
-
-        await snapshot_repo.create(
-            db,
-            url.id,
-            raw_html=response.text,
-            text_content=text_content,
-            content_hash=content_hash,
-            http_status=response.status_code,
-        )
-        await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
+        if not await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
+            await snapshot_repo.create(
+                db,
+                url.id,
+                raw_html=response.text,
+                text_content=text_content,
+                content_hash=content_hash,
+                http_status=response.status_code,
+            )
 
     except Exception as e:
         await snapshot_repo.create(
@@ -158,4 +159,6 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL, depth: int = 0):
             http_status=None,
             error_message=str(e),
         )
-        await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
+
+    await url_repo.update(db, url, last_checked_at=datetime.now(UTC))
+    await commit_or_rollback(db)

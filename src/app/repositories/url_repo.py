@@ -2,21 +2,9 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, or_, select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import MonitoredURL
-
-
-async def _commit_and_refresh(db: AsyncSession, monitored_url: MonitoredURL) -> MonitoredURL:
-    try:
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise
-
-    await db.refresh(monitored_url)
-    return monitored_url
 
 
 async def get(db: AsyncSession, monitored_url_id: UUID) -> MonitoredURL | None:
@@ -185,7 +173,7 @@ async def create(
     )
 
     db.add(monitored_url)
-    return await _commit_and_refresh(db, monitored_url)
+    return monitored_url
 
 
 async def update(
@@ -196,16 +184,11 @@ async def update(
     for field, value in update_data.items():
         setattr(monitored_url, field, value)
 
-    return await _commit_and_refresh(db, monitored_url)
+    return monitored_url
 
 
 async def delete(db: AsyncSession, monitored_url: MonitoredURL) -> None:
-    try:
-        await db.delete(monitored_url)
-        await db.commit()
-    except SQLAlchemyError:
-        await db.rollback()
-        raise
+    await db.delete(monitored_url)
 
 
 async def delete_by_id(db: AsyncSession, monitored_url_id: UUID) -> bool:

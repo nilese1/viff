@@ -1,7 +1,8 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db import commit_and_refresh, commit_or_rollback
 from app.repositories import snapshot_repo, url_repo
 
 
@@ -13,6 +14,7 @@ async def test_monitored_url_crud(db_session: AsyncSession) -> None:
         check_interval=120,
         selector_ignore="nav, footer",
     )
+    monitored_url = await commit_and_refresh(db_session, monitored_url)
 
     fetched = await url_repo.get(db_session, monitored_url.id)
     assert fetched is not None
@@ -36,8 +38,7 @@ async def test_monitored_url_crud(db_session: AsyncSession) -> None:
         is_active="N",
     )
     updated.last_checked_at = checked_at
-    await db_session.commit()
-    await db_session.refresh(updated)
+    updated = await commit_and_refresh(db_session, updated)
     assert updated.label is None
     assert updated.check_interval == 300
     assert updated.selector_ignore is None
@@ -45,6 +46,7 @@ async def test_monitored_url_crud(db_session: AsyncSession) -> None:
     assert updated.last_checked_at == checked_at
 
     deleted = await url_repo.delete_by_id(db_session, monitored_url.id)
+    await commit_or_rollback(db_session)
     assert deleted is True
     assert await url_repo.get(db_session, monitored_url.id) is None
     assert await url_repo.delete_by_id(db_session, monitored_url.id) is False
@@ -96,8 +98,10 @@ async def test_monitored_url_crud(db_session: AsyncSession) -> None:
 #     assert [url.id for url in inactive_due_urls] == [inactive_url.id]
 #
 
+
 async def test_snapshot_crud(db_session: AsyncSession) -> None:
     monitored_url = await url_repo.create(db_session, "https://example.com/")
+    monitored_url = await commit_and_refresh(db_session, monitored_url)
 
     snapshot = await snapshot_repo.create(
         db_session,
@@ -107,6 +111,7 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
         content_hash="hash-1",
         http_status=200,
     )
+    snapshot = await commit_and_refresh(db_session, snapshot)
 
     fetched = await snapshot_repo.get(db_session, snapshot.id)
     assert fetched is not None
@@ -131,6 +136,7 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
         error_message="server error",
         notified_at=notified_at,
     )
+    updated = await commit_and_refresh(db_session, updated)
     assert updated.raw_html is None
     assert updated.text_content == "second"
     assert updated.content_hash == "hash-2"
@@ -143,11 +149,13 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
         snapshot,
         text_content="third",
     )
+    updated = await commit_and_refresh(db_session, updated)
     assert updated.text_content == "third"
     assert updated.content_hash == "hash-2"
     assert updated.error_message == "server error"
 
     deleted = await snapshot_repo.delete_by_id(db_session, snapshot.id)
+    await commit_or_rollback(db_session)
     assert deleted is True
     assert await snapshot_repo.get(db_session, snapshot.id) is None
     assert await snapshot_repo.delete_by_id(db_session, snapshot.id) is False
