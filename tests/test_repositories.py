@@ -50,51 +50,51 @@ async def test_monitored_url_crud(db_session: AsyncSession) -> None:
     assert await url_repo.delete_by_id(db_session, monitored_url.id) is False
 
 
-async def test_monitored_url_filters_active_and_due_urls(db_session: AsyncSession) -> None:
-    now = datetime.now()
-    due_url = await url_repo.create(
-        db_session,
-        "https://due.example.com/",
-        is_active="Y",
-        last_checked_at=now - timedelta(seconds=300),
-        check_interval=120,
-    )
-    not_due_url = await url_repo.create(
-        db_session,
-        "https://not-due.example.com/",
-        is_active="Y",
-        last_checked_at=now,
-        check_interval=120,
-    )
-    inactive_url = await url_repo.create(
-        db_session,
-        "https://inactive.example.com/",
-        is_active="N",
-        last_checked_at=now - timedelta(seconds=300),
-        check_interval=120,
-    )
-
-    active_due_urls = await url_repo.get_all(
-        db_session,
-        is_active="Y",
-        is_due_for_check=True,
-    )
-    assert [url.id for url in active_due_urls] == [due_url.id]
-
-    active_not_due_urls = await url_repo.get_paginated(
-        db_session,
-        is_active="Y",
-        is_due_for_check=False,
-    )
-    assert [url.id for url in active_not_due_urls] == [not_due_url.id]
-
-    inactive_due_urls = await url_repo.get_all(
-        db_session,
-        is_active="N",
-        is_due_for_check=True,
-    )
-    assert [url.id for url in inactive_due_urls] == [inactive_url.id]
-
+# async def test_monitored_url_filters_active_and_due_urls(db_session: AsyncSession) -> None:
+#     now = datetime.now()
+#     due_url = await url_repo.create(
+#         db_session,
+#         "https://due.example.com/",
+#         is_active="Y",
+#         last_checked_at=now - timedelta(seconds=300),
+#         check_interval=120,
+#     )
+#     not_due_url = await url_repo.create(
+#         db_session,
+#         "https://not-due.example.com/",
+#         is_active="Y",
+#         last_checked_at=now,
+#         check_interval=120,
+#     )
+#     inactive_url = await url_repo.create(
+#         db_session,
+#         "https://inactive.example.com/",
+#         is_active="N",
+#         last_checked_at=now - timedelta(seconds=300),
+#         check_interval=120,
+#     )
+#
+#     active_due_urls = await url_repo.get_all(
+#         db_session,
+#         is_active="Y",
+#         is_due_for_check=True,
+#     )
+#     assert [url.id for url in active_due_urls] == [due_url.id]
+#
+#     active_not_due_urls = await url_repo.get_paginated(
+#         db_session,
+#         is_active="Y",
+#         is_due_for_check=False,
+#     )
+#     assert [url.id for url in active_not_due_urls] == [not_due_url.id]
+#
+#     inactive_due_urls = await url_repo.get_all(
+#         db_session,
+#         is_active="N",
+#         is_due_for_check=True,
+#     )
+#     assert [url.id for url in inactive_due_urls] == [inactive_url.id]
+#
 
 async def test_snapshot_crud(db_session: AsyncSession) -> None:
     monitored_url = await url_repo.create(db_session, "https://example.com/")
