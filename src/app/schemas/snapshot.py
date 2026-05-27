@@ -9,7 +9,7 @@ from app.schemas.base import (
 
 
 class SnapshotBase(BaseModel):
-    raw_html: str | None = None
+    warc_storage_key: str | None = None
     text_content: str | None = None
     content_hash: str | None = None
     http_status: int | None = None
@@ -22,7 +22,7 @@ class SnapshotCreate(SnapshotBase):
 
 
 class SnapshotUpdate(BaseModel):
-    raw_html: str | None = None
+    warc_storage_key: str | None = None
     text_content: str | None = None
     content_hash: str | None = None
     http_status: int | None = None

@@ -1,6 +1,7 @@
 import os
 
 os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("ARCHIVE_STORAGE_PATH", "/tmp/viff-test-archive")
 
 from collections.abc import AsyncIterator  # noqa: E402
 

@@ -18,6 +18,8 @@ dependencies = [
     "bs4>=0.0.2",
     "httpx>=0.28.1",
     "sqlalchemy-stubs>=0.4",
+    "boto3>=1.34",
+    "warcio>=1.7",
 ]
 
 [dependency-groups]

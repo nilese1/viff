@@ -9,6 +9,7 @@ __pycache__/
 .mypy_cache/
 data/*.db
 data/*.db-journal
+data/archive/
 *.egg-info/
 dist/
 build/

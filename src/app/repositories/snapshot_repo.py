@@ -87,23 +87,27 @@ async def create(
     db: AsyncSession,
     monitored_url_id: UUID,
     *,
-    raw_html: str | None = None,
+    id: UUID | None = None,
+    warc_storage_key: str | None = None,
     text_content: str | None = None,
     content_hash: str | None = None,
     http_status: int | None = None,
     error_message: str | None = None,
     notified_at: datetime | None = None,
 ) -> Snapshot:
-    snapshot = Snapshot(
-        monitored_url_id=monitored_url_id,
-        raw_html=raw_html,
-        text_content=text_content,
-        content_hash=content_hash,
-        http_status=http_status,
-        error_message=error_message,
-        notified_at=notified_at,
-    )
+    snapshot_data = {
+        "monitored_url_id": monitored_url_id,
+        "warc_storage_key": warc_storage_key,
+        "text_content": text_content,
+        "content_hash": content_hash,
+        "http_status": http_status,
+        "error_message": error_message,
+        "notified_at": notified_at,
+    }
+    if id is not None:
+        snapshot_data["id"] = id
 
+    snapshot = Snapshot(**snapshot_data)
     db.add(snapshot)
     return snapshot
 

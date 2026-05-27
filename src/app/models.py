@@ -66,7 +66,8 @@ class Snapshot(TimestampedUUIDBase):
     """
     A single scrape result for a MonitoredURL.
 
-    raw_html         : full page HTML before any cleaning
+    warc_storage_key : object-storage key for the WARC containing the page
+                       response and same-origin assets
     text_content     : extracted/cleaned text used for diffing
     content_hash     : SHA-256 of text_content; lets us skip storing a full
                        duplicate snapshot if nothing changed
@@ -87,7 +88,7 @@ class Snapshot(TimestampedUUIDBase):
         nullable=False,
         index=True,
     )
-    raw_html = Column(Text, nullable=True)
+    warc_storage_key = Column(String(2048), nullable=True)
     text_content = Column(Text, nullable=True)
     content_hash = Column(String(64), nullable=True, index=True)
     http_status = Column(Integer, nullable=True)

@@ -63,7 +63,7 @@ async def create(
         snapshot = await snapshot_repo.create(
             db,
             monitored_url_id,
-            raw_html=payload.raw_html,
+            warc_storage_key=payload.warc_storage_key,
             text_content=payload.text_content,
             content_hash=payload.content_hash,
             http_status=payload.http_status,

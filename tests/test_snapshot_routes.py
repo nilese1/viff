@@ -2,6 +2,10 @@ from uuid import uuid4
 
 from httpx import AsyncClient
 
+from app.archive.assets import FetchedResource
+from app.archive.storage import get_archive_storage
+from app.archive.warc import build_warc
+
 
 async def _create_monitored_url(client: AsyncClient, url: str = "https://example.com/") -> str:
     resp = await client.post(
@@ -22,12 +26,29 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
     monitored_url_id = await _create_monitored_url(client)
     other_monitored_url_id = await _create_monitored_url(client, "https://other.example.com/")
     base_path = f"/urls/id/{monitored_url_id}/snapshots"
+    warc_storage_key = f"tests/{monitored_url_id}/archive.warc.gz"
+    storage = get_archive_storage()
+    await storage.put_bytes(
+        warc_storage_key,
+        build_warc(
+            [
+                FetchedResource(
+                    url="https://example.com/",
+                    status_code=200,
+                    reason_phrase="OK",
+                    headers=(("Content-Type", "text/html; charset=utf-8"),),
+                    content=b"<html>first</html>",
+                )
+            ]
+        ),
+        "application/warc+gzip",
+    )
 
     create_resp = await client.post(
         f"{base_path}/",
         json={
             "monitored_url_id": other_monitored_url_id,
-            "raw_html": "<html>first</html>",
+            "warc_storage_key": warc_storage_key,
             "text_content": "first",
             "content_hash": "hash-1",
             "http_status": 200,
@@ -36,6 +57,9 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
     assert create_resp.status_code == 201
     created = create_resp.json()
     assert created["monitored_url_id"] == monitored_url_id
+    assert created["warc_storage_key"] == warc_storage_key
+    assert "raw_html_storage_key" not in created
+    assert "raw_html" not in created
     assert created["text_content"] == "first"
 
     snapshot_id = created["id"]
@@ -45,7 +69,15 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
 
     get_resp = await client.get(f"{base_path}/id/{snapshot_id}")
     assert get_resp.status_code == 200
-    assert get_resp.json()["id"] == snapshot_id
+    fetched = get_resp.json()
+    assert fetched["id"] == snapshot_id
+    assert "raw_html" not in fetched
+    assert "raw_html_storage_key" not in fetched
+
+    asset_resp = await client.get(f"/archive/assets/page/{warc_storage_key}")
+    assert asset_resp.status_code == 200
+    assert asset_resp.headers["content-type"].startswith("text/html")
+    assert asset_resp.text == "<html>first</html>"
 
     list_resp = await client.get(f"{base_path}/list")
     assert list_resp.status_code == 200
@@ -61,7 +93,6 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
     update_resp = await client.put(
         f"{base_path}/id/{snapshot_id}",
         json={
-            "raw_html": None,
             "text_content": "second",
             "content_hash": "hash-2",
             "http_status": 500,
@@ -70,7 +101,8 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
     )
     assert update_resp.status_code == 200
     updated = update_resp.json()
-    assert updated["raw_html"] is None
+    assert "raw_html" not in updated
+    assert "raw_html_storage_key" not in updated
     assert updated["text_content"] == "second"
     assert updated["content_hash"] == "hash-2"
     assert updated["http_status"] == 500
@@ -81,6 +113,14 @@ async def test_snapshot_crud_endpoints_are_scoped_to_monitored_url(
 
     deleted_get_resp = await client.get(f"{base_path}/id/{snapshot_id}")
     assert deleted_get_resp.status_code == 404
+
+
+async def test_archive_asset_endpoint_rejects_invalid_storage_keys(
+    client: AsyncClient,
+) -> None:
+    resp = await client.get("/archive/assets/foo%5Cbar")
+
+    assert resp.status_code == 400
 
 
 async def test_snapshot_pagination_requires_existing_monitored_url(

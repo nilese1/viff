@@ -1,4 +1,5 @@
 import hashlib
+import uuid
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -8,6 +9,9 @@ from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.archive.assets import FetchedResource, fetch_same_origin_assets
+from app.archive.storage import build_object_key, get_archive_storage
+from app.archive.warc import build_warc
 from app.db import commit_and_refresh, commit_or_rollback
 from app.models import MonitoredURL
 from app.repositories import snapshot_repo, url_repo
@@ -114,43 +118,59 @@ async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
     await commit_or_rollback(db)
 
 
-async def scrape_url(db: AsyncSession, url: MonitoredURL, depth: int = 0):
+async def scrape_url(db: AsyncSession, url: MonitoredURL):
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True, max_redirects=10) as client:
             response = await client.get(str(url.url))
 
-        if depth > 10:
-            raise Exception("Redirected more than 10 times please check your url")
+            soup = BeautifulSoup(response.text, "html.parser")
 
-        if response.status_code == 301:
-            # so much wrong with this but good enough!
-            url.url = response.headers["location"]
-            await scrape_url(db, url, depth + 1)
-            return
+            # strip ignored selectors content is still saved in its entirety
+            # but stripping the selectors is for the hash only
+            # so we don't refresh if certain elements change
+            if url.selector_ignore:
+                for selector in url.selector_ignore.split(","):
+                    for tag in soup.select(selector.strip()):
+                        tag.decompose()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+            text_content = soup.get_text(separator="\n", strip=True)
+            content_hash = hashlib.sha256(text_content.encode()).hexdigest()
 
-        # strip ignored selectors content is still saved in its entirety
-        # but stripping the selectors is for the hash only
-        # so we don't refresh if certain elements change
-        if url.selector_ignore:
-            for selector in url.selector_ignore.split(","):
-                for tag in soup.select(selector.strip()):
-                    tag.decompose()
+            # skip if content hasn't changed
+            if not await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
+                snapshot_id = uuid.uuid4()
+                warc_storage_key = build_object_key(
+                    "snapshots",
+                    url.id,
+                    snapshot_id,
+                    "archive.warc.gz",
+                )
+                storage = get_archive_storage()
 
-        text_content = soup.get_text(separator="\n", strip=True)
-        content_hash = hashlib.sha256(text_content.encode()).hexdigest()
+                page_resource = FetchedResource(
+                    url=str(response.url),
+                    status_code=response.status_code,
+                    reason_phrase=response.reason_phrase,
+                    headers=tuple((key, value) for key, value in response.headers.items()),
+                    content=response.content,
+                )
+                asset_resources = await fetch_same_origin_assets(
+                    client,
+                    response.text,
+                    str(response.url),
+                )
+                warc_bytes = build_warc([page_resource, *asset_resources])
+                await storage.put_bytes(warc_storage_key, warc_bytes, "application/warc+gzip")
 
-        # skip if content hasn't changed
-        if not await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
-            await snapshot_repo.create(
-                db,
-                url.id,
-                raw_html=response.text,
-                text_content=text_content,
-                content_hash=content_hash,
-                http_status=response.status_code,
-            )
+                await snapshot_repo.create(
+                    db,
+                    url.id,
+                    id=snapshot_id,
+                    warc_storage_key=warc_storage_key,
+                    text_content=text_content,
+                    content_hash=content_hash,
+                    http_status=response.status_code,
+                )
 
     except Exception as e:
         await snapshot_repo.create(

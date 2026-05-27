@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import Base, engine
-from app.routes import pages, snapshots, urls
+from app.routes import archive, pages, snapshots, urls
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    app.include_router(archive.router)
     app.include_router(pages.router)
     app.include_router(urls.router)
     app.include_router(snapshots.router)

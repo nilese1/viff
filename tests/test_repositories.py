@@ -106,7 +106,7 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
     snapshot = await snapshot_repo.create(
         db_session,
         monitored_url.id,
-        raw_html="<html>first</html>",
+        warc_storage_key="tests/snapshot/archive.warc.gz",
         text_content="first",
         content_hash="hash-1",
         http_status=200,
@@ -129,7 +129,6 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
     updated = await snapshot_repo.update(
         db_session,
         snapshot,
-        raw_html=None,
         text_content="second",
         content_hash="hash-2",
         http_status=500,
@@ -137,7 +136,7 @@ async def test_snapshot_crud(db_session: AsyncSession) -> None:
         notified_at=notified_at,
     )
     updated = await commit_and_refresh(db_session, updated)
-    assert updated.raw_html is None
+    assert updated.warc_storage_key == "tests/snapshot/archive.warc.gz"
     assert updated.text_content == "second"
     assert updated.content_hash == "hash-2"
     assert updated.http_status == 500

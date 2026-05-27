@@ -27,11 +27,11 @@
   </dl>
 
   <div class="snapshot-preview">
-    {% if snapshot.raw_html %}
+    {% if snapshot.warc_storage_key %}
       <iframe
         title="{{ panel_title }} rendered HTML"
         sandbox=""
-        srcdoc="{{ snapshot.raw_html|e }}"
+        src="{{ request.url_for('get_archive_warc_page', storage_key=snapshot.warc_storage_key) }}"
       ></iframe>
     {% elif snapshot.text_content %}
       <pre>{{ snapshot.text_content }}</pre>
