@@ -14,7 +14,7 @@ from app.archive.storage import build_object_key, get_archive_storage
 from app.archive.warc import build_warc
 from app.db import commit_and_refresh, commit_or_rollback
 from app.models import MonitoredURL
-from app.repositories import snapshot_repo, url_repo
+from app.repositories import asset_repo, snapshot_repo, url_repo
 from app.schemas.url import URLCreate, URLListParams, URLPaginationParams, URLUpdate
 
 URL_FILTER_FIELDS = {
@@ -98,7 +98,9 @@ async def create(db: AsyncSession, payload: URLCreate) -> MonitoredURL:
         raise HTTPException(status_code=409, detail="URL already exists") from exc
 
 
-async def update(db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate) -> MonitoredURL:
+async def update(
+    db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate
+) -> MonitoredURL:
     monitored_url = await get_by_id(db, monitored_url_id)
     update_data = URLUpdate.model_validate(payload).model_dump(
         exclude_unset=True,
@@ -120,7 +122,9 @@ async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
 
 async def scrape_url(db: AsyncSession, url: MonitoredURL):
     try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True, max_redirects=10) as client:
+        async with httpx.AsyncClient(
+            timeout=10, follow_redirects=True, max_redirects=10
+        ) as client:
             response = await client.get(str(url.url))
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -137,45 +141,92 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL):
             content_hash = hashlib.sha256(text_content.encode()).hexdigest()
 
             # skip if content hasn't changed
-            if not await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
-                snapshot_id = uuid.uuid4()
+            if await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
+                return
+
+            warc_storage_key = build_object_key(
+                "snapshots",
+                url.id,
+                url.label,
+                "archive.warc.gz",
+            )
+            storage = get_archive_storage()
+
+            page_resource = FetchedResource(
+                url=str(response.url),
+                status_code=response.status_code,
+                reason_phrase=response.reason_phrase,
+                headers=tuple((key, value) for key, value in response.headers.items()),
+                content=response.content,
+            )
+            asset_resources = await fetch_same_origin_assets(
+                client,
+                response.text,
+                str(response.url),
+            )
+            warc_bytes = build_warc(page_resource)
+            await storage.put_bytes(
+                warc_storage_key, warc_bytes, "application/warc+gzip"
+            )
+
+            snapshot = await snapshot_repo.create(
+                db,
+                url.id,
+                id=uuid.uuid4(),
+                text_content=text_content,
+                content_hash=content_hash,
+                http_status=response.status_code,
+            )
+
+            # seperating the warc by resource rather than all of the resources at once
+            # to make the archive more resilient to individual changes per
+            # asset, this goes against warc's main philosophy of keeping
+            # assets local to each archive so might change this once
+            # profiling is set up if there's no noticable difference
+            # in storage size given volatile assets
+            #
+            # tl;dr doing easy shit the hard way because I have no idea
+            # what I'm doing
+            for resource in asset_resources:
+                content_hash = hashlib.sha256(resource.encode()).hexdigest()
+
+                # resource already exists
+                if await asset_repo.get_by_content_hash(db, url, content_hash):
+                    continue
+
                 warc_storage_key = build_object_key(
                     "snapshots",
                     url.id,
-                    snapshot_id,
+                    url.label,
                     "archive.warc.gz",
                 )
-                storage = get_archive_storage()
 
-                page_resource = FetchedResource(
-                    url=str(response.url),
-                    status_code=response.status_code,
-                    reason_phrase=response.reason_phrase,
-                    headers=tuple((key, value) for key, value in response.headers.items()),
-                    content=response.content,
+                warc_bytes = build_warc(resource)
+                await storage.put_bytes(
+                    warc_storage_key, warc_bytes, "application/warc+gzip"
                 )
-                asset_resources = await fetch_same_origin_assets(
-                    client,
-                    response.text,
-                    str(response.url),
-                )
-                warc_bytes = build_warc([page_resource, *asset_resources])
-                await storage.put_bytes(warc_storage_key, warc_bytes, "application/warc+gzip")
 
-                await snapshot_repo.create(
+                await asset_repo.create(
                     db,
-                    url.id,
-                    id=snapshot_id,
+                    snapshot.id,
+                    id=uuid.uuid4(),
+                    label=resource.url,
                     warc_storage_key=warc_storage_key,
-                    text_content=text_content,
                     content_hash=content_hash,
-                    http_status=response.status_code,
+                    http_status=resource.status_code,
                 )
 
     except Exception as e:
-        await snapshot_repo.create(
+        snaptshot = await snapshot_repo.create(
             db,
             url.id,
+            http_status=None,
+            error_message=str(e),
+        )
+
+        await asset_repo.create(
+            db,
+            snaptshot.id,
             http_status=None,
             error_message=str(e),
         )
