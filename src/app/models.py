@@ -11,7 +11,6 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 
 from .db import Base
 
@@ -59,12 +58,12 @@ class MonitoredURL(TimestampedUUIDBase):
     last_checked_at = Column(DateTime(timezone=True), nullable=True)
 
     # relationships
-    snapshots = relationship(
-        "Snapshot",
-        back_populates="monitored_url",
-        cascade="all, delete-orphan",
-        order_by="Snapshot.created_at.desc()",
-    )
+    # snapshots = relationship(
+    #     "Snapshot",
+    #     back_populates="monitored_url",
+    #     cascade="all, delete-orphan",
+    #     order_by="Snapshot.created_at.desc()",
+    # )
 
     def __repr__(self) -> str:
         return f"<MonitoredURL id={self.id} url={self.url!r}>"
@@ -87,9 +86,7 @@ class Snapshot(TimestampedUUIDBase):
 
     __tablename__ = "snapshots"
     __table_args__ = (
-        UniqueConstraint(
-            "monitored_url_id", "content_hash", name="uq_snapshot_url_hash"
-        ),
+        UniqueConstraint("monitored_url_id", "content_hash", name="uq_snapshot_url_hash"),
     )
 
     monitored_url_id = Column(
@@ -104,19 +101,54 @@ class Snapshot(TimestampedUUIDBase):
     error_message = Column(Text, nullable=True)
     notified_at = Column(DateTime(timezone=True), nullable=True)
 
-    monitored_url = relationship("MonitoredURL", back_populates="snapshots")
-    snapshot_assets = relationship(
-        "SnapshotAsset",
-        back_populates="snapshots",
-        cascade="all, delete-orphan",
-        order_by="SnapshotAsset.created_at.desc()",
-    )
+    # monitored_url = relationship("MonitoredURL", back_populates="snapshots")
+    # snapshot_assets = relationship(
+    #     "SnapshotAsset",
+    #     back_populates="snapshots",
+    #     cascade="all, delete-orphan",
+    #     order_by="SnapshotAsset.created_at.desc()",
+    # )
 
     def __repr__(self) -> str:
         return (
             f"<Snapshot id={self.id} url_id={self.monitored_url_id} "
             f"status={self.http_status} hash={self.content_hash!r}>"
         )
+
+
+class Asset(TimestampedUUIDBase):
+    """
+    A single asset stored as a tarball given a particular storage key
+
+    warc_storage_key : object-storage key for the WARC containing same-origin
+                       assets
+    content_hash     : SHA-256 of text_content; lets us skip storing a full
+                       duplicate snapshot if nothing changed
+    http_status      : the HTTP status code returned by the server
+    error_message    : populated if the scrape failed (timeout, DNS, etc.)
+    notified_at      : populated once the user has been alerted about this change;
+                       null means notification is still pending
+    """
+
+    __tablename__ = "assets"
+    __table_args__ = (
+        UniqueConstraint("monitored_url_id", "content_hash", name="uq_snapshot_url_hash"),
+    )
+
+    monitored_url_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("monitored_urls.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    label = Column(String(255), nullable=True)
+    warc_storage_key = Column(String(2048), nullable=True)
+    content_hash = Column(String(64), nullable=True, index=True)
+    http_status = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    notified_at = Column(DateTime(timezone=True), nullable=True)
+
+    # monitored_urls = relationship("MonitoredURL", back_populates="assets")
 
 
 class SnapshotAsset(TimestampedUUIDBase):
@@ -139,42 +171,5 @@ class SnapshotAsset(TimestampedUUIDBase):
         index=True,
     )
 
-    snapshot = relationship("Snapshot", back_populates="snapshot_assets")
-    asset = relationship("Asset", back_populates="snapshot_assets")
-
-
-class Asset(TimestampedUUIDBase):
-    """
-    A single asset stored as a tarball given a particular storage key
-
-    warc_storage_key : object-storage key for the WARC containing same-origin
-                       assets
-    content_hash     : SHA-256 of text_content; lets us skip storing a full
-                       duplicate snapshot if nothing changed
-    http_status      : the HTTP status code returned by the server
-    error_message    : populated if the scrape failed (timeout, DNS, etc.)
-    notified_at      : populated once the user has been alerted about this change;
-                       null means notification is still pending
-    """
-
-    __tablename__ = "assets"
-    __table_args__ = (
-        UniqueConstraint(
-            "monitored_url_id", "content_hash", name="uq_snapshot_url_hash"
-        ),
-    )
-
-    monitored_url_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("monitored_urls.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    label = Column(String(255), nullable=True)
-    warc_storage_key = Column(String(2048), nullable=True)
-    content_hash = Column(String(64), nullable=True, index=True)
-    http_status = Column(Integer, nullable=True)
-    error_message = Column(Text, nullable=True)
-    notified_at = Column(DateTime(timezone=True), nullable=True)
-
-    monitored_url = relationship("MonitoredURL", back_populates="assets")
+    # snapshots = relationship("Snapshot", back_populates="snapshot_assets")
+    # assets = relationship("Asset", back_populates="snapshot_assets")

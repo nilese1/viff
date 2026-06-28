@@ -88,7 +88,6 @@ async def create(
     monitored_url_id: UUID,
     *,
     id: UUID | None = None,
-    warc_storage_key: str | None = None,
     text_content: str | None = None,
     content_hash: str | None = None,
     http_status: int | None = None,
@@ -97,7 +96,6 @@ async def create(
 ) -> Snapshot:
     snapshot_data = {
         "monitored_url_id": monitored_url_id,
-        "warc_storage_key": warc_storage_key,
         "text_content": text_content,
         "content_hash": content_hash,
         "http_status": http_status,

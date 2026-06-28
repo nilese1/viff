@@ -13,7 +13,7 @@ from app.archive.assets import FetchedResource, fetch_same_origin_assets
 from app.archive.storage import build_object_key, get_archive_storage
 from app.archive.warc import build_warc
 from app.db import commit_and_refresh, commit_or_rollback
-from app.models import MonitoredURL
+from app.models import MonitoredURL, Snapshot
 from app.repositories import asset_repo, snapshot_repo, url_repo
 from app.schemas.url import URLCreate, URLListParams, URLPaginationParams, URLUpdate
 
@@ -98,9 +98,7 @@ async def create(db: AsyncSession, payload: URLCreate) -> MonitoredURL:
         raise HTTPException(status_code=409, detail="URL already exists") from exc
 
 
-async def update(
-    db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate
-) -> MonitoredURL:
+async def update(db: AsyncSession, monitored_url_id: UUID, payload: URLUpdate) -> MonitoredURL:
     monitored_url = await get_by_id(db, monitored_url_id)
     update_data = URLUpdate.model_validate(payload).model_dump(
         exclude_unset=True,
@@ -120,11 +118,12 @@ async def delete(db: AsyncSession, monitored_url_id: UUID) -> None:
     await commit_or_rollback(db)
 
 
+# TODO: make sure that asset hashes are being compared even when page content hasn't changed
 async def scrape_url(db: AsyncSession, url: MonitoredURL):
     try:
-        async with httpx.AsyncClient(
-            timeout=10, follow_redirects=True, max_redirects=10
-        ) as client:
+        snapshot: Snapshot = None
+
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True, max_redirects=10) as client:
             response = await client.get(str(url.url))
 
             soup = BeautifulSoup(response.text, "html.parser")
@@ -144,10 +143,12 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL):
             if await snapshot_repo.get_by_content_hash(db, url.id, content_hash):
                 return
 
+            snapshot_id = uuid.uuid4()
+
             warc_storage_key = build_object_key(
                 "snapshots",
                 url.id,
-                url.label,
+                snapshot_id,
                 "archive.warc.gz",
             )
             storage = get_archive_storage()
@@ -164,19 +165,18 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL):
                 response.text,
                 str(response.url),
             )
-            warc_bytes = build_warc(page_resource)
-            await storage.put_bytes(
-                warc_storage_key, warc_bytes, "application/warc+gzip"
-            )
+            warc_bytes = build_warc([page_resource])
+            await storage.put_bytes(warc_storage_key, warc_bytes, "application/warc+gzip")
 
             snapshot = await snapshot_repo.create(
                 db,
                 url.id,
-                id=uuid.uuid4(),
+                id=snapshot_id,
                 text_content=text_content,
                 content_hash=content_hash,
                 http_status=response.status_code,
             )
+            await db.flush()
 
             # seperating the warc by resource rather than all of the resources at once
             # to make the archive more resilient to individual changes per
@@ -188,28 +188,30 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL):
             # tl;dr doing easy shit the hard way because I have no idea
             # what I'm doing
             for resource in asset_resources:
-                content_hash = hashlib.sha256(resource.encode()).hexdigest()
+                content_hash = hashlib.sha256(resource.content).hexdigest()
 
                 # resource already exists
-                if await asset_repo.get_by_content_hash(db, url, content_hash):
+                if await asset_repo.get_by_content_hash(db, url.id, content_hash):
                     continue
+
+                resource_id = uuid.uuid4()
 
                 warc_storage_key = build_object_key(
                     "snapshots",
                     url.id,
-                    url.label,
-                    "archive.warc.gz",
+                    snapshot.id,
+                    resource_id,
+                    "asset-archive.warc.gz",
                 )
 
-                warc_bytes = build_warc(resource)
-                await storage.put_bytes(
-                    warc_storage_key, warc_bytes, "application/warc+gzip"
-                )
+                warc_bytes = build_warc([resource])
+                await storage.put_bytes(warc_storage_key, warc_bytes, "application/warc+gzip")
 
                 await asset_repo.create(
                     db,
                     snapshot.id,
-                    id=uuid.uuid4(),
+                    url.id,
+                    id=resource_id,
                     label=resource.url,
                     warc_storage_key=warc_storage_key,
                     content_hash=content_hash,
@@ -217,16 +219,23 @@ async def scrape_url(db: AsyncSession, url: MonitoredURL):
                 )
 
     except Exception as e:
-        snaptshot = await snapshot_repo.create(
-            db,
-            url.id,
-            http_status=None,
-            error_message=str(e),
-        )
+        if snapshot is None:
+            snapshot = await snapshot_repo.create(
+                db,
+                url.id,
+                http_status=None,
+                error_message=str(e),
+            )
+        else:
+            await snapshot_repo.update(
+                db, snapshot, update_data={"http_status": None, "error_message": str(e)}
+            )
+        await db.flush()
 
         await asset_repo.create(
             db,
-            snaptshot.id,
+            snapshot.id,
+            url.id,
             http_status=None,
             error_message=str(e),
         )

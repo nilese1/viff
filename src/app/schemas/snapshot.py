@@ -9,7 +9,6 @@ from app.schemas.base import (
 
 
 class SnapshotBase(BaseModel):
-    warc_storage_key: str | None = None
     text_content: str | None = None
     content_hash: str | None = None
     http_status: int | None = None
@@ -21,13 +20,8 @@ class SnapshotCreate(SnapshotBase):
     pass
 
 
-class SnapshotUpdate(BaseModel):
-    warc_storage_key: str | None = None
-    text_content: str | None = None
-    content_hash: str | None = None
-    http_status: int | None = None
-    error_message: str | None = None
-    notified_at: datetime | None = None
+class SnapshotUpdate(SnapshotBase):
+    pass
 
 
 class SnapshotResponse(SnapshotBase):

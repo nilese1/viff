@@ -28,7 +28,7 @@ logs:
 	docker compose logs -f app
 
 test:
-	APP_ENV=test uv run pytest -q
+	APP_ENV=test uv run pytest -q "$(files)"
 
 test-docker:
 	docker compose -f compose.yaml -f compose.test.yaml run --rm app
